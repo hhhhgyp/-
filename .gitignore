@@ -1,0 +1,47 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------- 环境变量与密钥（严禁提交） ----------
+.env
+.env.local
+.env.production
+*.key
+*.pem
+
+# ---------- 日志 ----------
+logs/
+*.log
+
+# ---------- 测试报告与临时产物 ----------
+report.html
+reports/
+jmeter/result/
+jmeter/*.jtl
+jmeter/data/
+postman/*.postman_environment.local.json
+
+# ---------- 抓包与导出的敏感会话 ----------
+fiddler/
+*.saz
+*.har
+*.pcap
+*.pcapng
+
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ---------- Excel / Office 临时文件 ----------
+~$*.xlsx
+~$*.docx

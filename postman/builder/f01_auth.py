@@ -1,0 +1,133 @@
+﻿# -*- coding: utf-8 -*-
+"""01 认证与异常：登录失败、注册、登出、旧 token 失效、越权。"""
+
+from __future__ import annotations
+
+from . import err, folder, ok, req
+
+FOLDER = folder(
+    "01 认证与异常",
+    [
+        req(
+            "01-01 登录：密码错误",
+            "POST",
+            "/auth/login",
+            auth="none",
+            body={"username": "{{username}}", "password": "Wrong@123456"},
+            tests=err(401, "AUTH_INVALID_CREDENTIALS"),
+            desc="对应 TC-AUTH-02。用户名存在但密码错误。",
+        ),
+        req(
+            "01-02 登录：用户不存在（错误码与密码错误一致）",
+            "POST",
+            "/auth/login",
+            auth="none",
+            body={"username": "no_such_user_xyz", "password": "Wrong@123456"},
+            tests=err(401, "AUTH_INVALID_CREDENTIALS"),
+            desc="对应 TC-AUTH-03 / BR-27：不区分「用户不存在」和「密码错误」，避免用户名枚举。",
+        ),
+        req(
+            "01-03 注册：新用户成功",
+            "POST",
+            "/auth/register",
+            auth="none",
+            pre=["pm.collectionVariables.set('reg_username', 'tst_pm_' + Date.now());"],
+            body={"username": "{{reg_username}}", "password": "Demo@123456"},
+            tests=ok(
+                201,
+                "const b = pm.response.json();",
+                "pm.test('用户名与请求一致', () => pm.expect(b.username).to.eql(pm.collectionVariables.get('reg_username')));",
+                "pm.test('注册角色固定为 USER', () => pm.expect(b.role).to.eql('USER'));",
+                "pm.test('初始状态 ACTIVE', () => pm.expect(b.status).to.eql('ACTIVE'));",
+                "pm.test('不返回密码散列', () => pm.expect(b).to.not.have.property('password_hash'));",
+            ),
+            desc="对应 TC-AUTH-04。用户名带时间戳，避免重复执行时撞唯一索引。",
+        ),
+        req(
+            "01-04 注册：用户名已存在",
+            "POST",
+            "/auth/register",
+            auth="none",
+            body={"username": "user01", "password": "Demo@123456"},
+            tests=err(409, "USERNAME_EXISTS"),
+            desc="对应 TC-AUTH-05。使用种子账号 user01，不依赖 01-03 是否成功。",
+        ),
+        req(
+            "01-05 注册：弱口令（纯数字）",
+            "POST",
+            "/auth/register",
+            auth="none",
+            body={"username": "tst_pm_weak", "password": "12345678"},
+            tests=err(400, "VALIDATION_ERROR"),
+            desc="对应 TC-AUTH-06 / BR-28：8~32 位且必须同时包含字母和数字。",
+        ),
+        req(
+            "01-06 鉴权：未携带 token",
+            "GET",
+            "/auth/me",
+            auth="none",
+            tests=err(401, "AUTH_TOKEN_MISSING"),
+            desc="对应 TC-AUTH-08 / BR-25。",
+        ),
+        req(
+            "01-07 鉴权：伪造 token",
+            "GET",
+            "/auth/me",
+            auth="none",
+            headers=[("Authorization", "Bearer not-a-jwt")],
+            tests=err(401, "AUTH_TOKEN_INVALID"),
+            desc="对应 TC-AUTH-09：签名无法解析。",
+        ),
+        req(
+            "01-08 登出 user02",
+            "POST",
+            "/auth/logout",
+            auth="user2",
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.test('返回提示信息', () => pm.expect(b.message).to.be.a('string').and.not.empty);",
+            ),
+            desc="对应 TC-AUTH-10。登出会递增 token_version，使该用户所有旧 token 立即失效。",
+        ),
+        req(
+            "01-09 登出后旧 token 失效",
+            "GET",
+            "/auth/me",
+            auth="user2",
+            tests=err(401, "AUTH_TOKEN_INVALID"),
+            desc="对应 TC-AUTH-10 / BR-29。此处 token_user2 仍是 01-08 之前签发的旧 token。",
+        ),
+        req(
+            "01-10 重新登录 user02（恢复后续越权测试所需 token）",
+            "POST",
+            "/auth/login",
+            auth="none",
+            body={"username": "{{user2_username}}", "password": "{{user2_password}}"},
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.collectionVariables.set('token_user2', b.access_token);",
+                "pm.test('重新签发 token', () => pm.expect(b.access_token).to.be.a('string').and.not.empty);",
+            ),
+            desc="清理动作：01-08 让旧 token 失效后必须重新登录，否则 06 文件夹的越权用例会得到 401 而不是 403。",
+        ),
+        req(
+            "01-11 越权：普通用户访问管理接口",
+            "GET",
+            "/admin/stats/overview",
+            auth="user",
+            tests=err(403, "AUTH_FORBIDDEN"),
+            desc="对应 TC-AUTHZ-02 / BR-26。注意期望 403 而不是 401：token 有效但角色不足。",
+        ),
+        req(
+            "01-12 越权：未登录访问管理接口",
+            "GET",
+            "/admin/stats/overview",
+            auth="none",
+            tests=err(401, "AUTH_TOKEN_MISSING"),
+            desc="对应 TC-AUTHZ-01：鉴权先于授权。",
+        ),
+    ],
+    desc="认证类正常/异常路径。执行顺序有依赖：01-08 → 01-09 → 01-10 必须连续执行。",
+)

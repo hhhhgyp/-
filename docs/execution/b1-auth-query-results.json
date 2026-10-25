@@ -1,0 +1,220 @@
+{
+  "run_id": "135cae54",
+  "executed_at": "2026-10-20T17:07:41",
+  "target_date": "2026-10-21",
+  "base_url": "http://127.0.0.1:8138/api/v1",
+  "execution_mode": "自动化脚本（API + MySQL 断言），不是人工点击",
+  "total": 26,
+  "passed": 26,
+  "failed": 0,
+  "cases": [
+    {
+      "case_id": "TC-AUTH-01",
+      "title": "用户登录成功",
+      "status": "PASS",
+      "detail": "200 bearer/7200；/auth/me=user01；token_version=12 未变；last_login_at 已更新（2026-10-20 17:07:35）",
+      "error": "",
+      "elapsed_ms": 448
+    },
+    {
+      "case_id": "TC-AUTH-02",
+      "title": "密码错误",
+      "status": "PASS",
+      "detail": "401 AUTH_INVALID_CREDENTIALS；响应无 token；last_login_at 未更新",
+      "error": "",
+      "elapsed_ms": 463
+    },
+    {
+      "case_id": "TC-AUTH-03",
+      "title": "用户名不存在",
+      "status": "PASS",
+      "detail": "两次均 401 AUTH_INVALID_CREDENTIALS；message 一致（'用户名或密码错误'）",
+      "error": "",
+      "elapsed_ms": 407
+    },
+    {
+      "case_id": "TC-AUTH-04",
+      "title": "注册成功",
+      "status": "PASS",
+      "detail": "201；role=USER/status=ACTIVE；响应无密码字段；DB bcrypt 哈希且非明文",
+      "error": "",
+      "elapsed_ms": 445
+    },
+    {
+      "case_id": "TC-AUTH-05",
+      "title": "注册唯一性冲突",
+      "status": "PASS",
+      "detail": "用户名冲突=409 USERNAME_EXISTS；手机号冲突=409 PHONE_EXISTS；用户数未增加。注：用例写 13900000002，实际种子为 13800000002，按实际数据执行",
+      "error": "",
+      "elapsed_ms": 40
+    },
+    {
+      "case_id": "TC-AUTH-06",
+      "title": "注册参数非法（逐项）",
+      "status": "PASS",
+      "detail": "五条均 400 VALIDATION_ERROR 且 detail 指向字段；无用户落库；username=ab->username；username=ab-cd->username；password=12345678->password；password=abcdefgh->password；phone=12345678901->phone",
+      "error": "",
+      "elapsed_ms": 62
+    },
+    {
+      "case_id": "TC-AUTH-07",
+      "title": "用户名长度边界",
+      "status": "PASS",
+      "detail": "32 位=201；33 位=400 VALIDATION_ERROR（username 字段）",
+      "error": "",
+      "elapsed_ms": 480
+    },
+    {
+      "case_id": "TC-AUTH-08",
+      "title": "未携带 token 访问受保护接口",
+      "status": "PASS",
+      "detail": "GET /auth/me 与 /reservations/my 均 401 AUTH_TOKEN_MISSING",
+      "error": "",
+      "elapsed_ms": 10
+    },
+    {
+      "case_id": "TC-AUTH-09",
+      "title": "非法 token 与过期 token",
+      "status": "PASS",
+      "detail": "篡改签名=401 AUTH_TOKEN_INVALID；过期 token=401 AUTH_TOKEN_EXPIRED",
+      "error": "",
+      "elapsed_ms": 512
+    },
+    {
+      "case_id": "TC-AUTH-10",
+      "title": "登出后旧 token 立即失效",
+      "status": "PASS",
+      "detail": "登出 200；token_version 3->4；旧 token 401；新 token 200",
+      "error": "",
+      "elapsed_ms": 993
+    },
+    {
+      "case_id": "TC-AUTH-11",
+      "title": "禁用账号",
+      "status": "PASS",
+      "detail": "禁用后登录=403 USER_DISABLED；旧 token=403；恢复 ACTIVE 后登录=200",
+      "error": "",
+      "elapsed_ms": 1321
+    },
+    {
+      "case_id": "TC-QRY-01",
+      "title": "寄存点列表默认分页",
+      "status": "PASS",
+      "detail": "200；total=2/page=1/page_size=20；两项字段完整",
+      "error": "",
+      "elapsed_ms": 9
+    },
+    {
+      "case_id": "TC-QRY-02",
+      "title": "城市与关键字筛选",
+      "status": "PASS",
+      "detail": "city=杭州→2；keyword=东站→SP002；city=上海→0",
+      "error": "",
+      "elapsed_ms": 73
+    },
+    {
+      "case_id": "TC-QRY-03",
+      "title": "分页参数越界",
+      "status": "PASS",
+      "detail": "三条均 400 VALIDATION_ERROR 且 detail 指向字段；{'page': 0}->page；{'page_size': 0}->page_size；{'page_size': 101}->page_size",
+      "error": "",
+      "elapsed_ms": 73
+    },
+    {
+      "case_id": "TC-QRY-04",
+      "title": "寄存点详情与不存在",
+      "status": "PASS",
+      "detail": "point 1：group_count=2/cabinet_count=20；99999→404 RESOURCE_NOT_FOUND",
+      "error": "",
+      "elapsed_ms": 31
+    },
+    {
+      "case_id": "TC-QRY-05",
+      "title": "柜体列表的柜格统计",
+      "status": "PASS",
+      "detail": "2 项；A=12/11（A-12 维护中）；B=8/8",
+      "error": "",
+      "elapsed_ms": 38
+    },
+    {
+      "case_id": "TC-QRY-06",
+      "title": "城市列表",
+      "status": "PASS",
+      "detail": "200；去重升序 ['杭州']",
+      "error": "",
+      "elapsed_ms": 8
+    },
+    {
+      "case_id": "TC-QRY-07",
+      "title": "按时间段查询可用柜格（Q5）",
+      "status": "PASS",
+      "detail": "200；slot_count=4；A-01 可用；A-12 MAINTENANCE；A/S=6/6",
+      "error": "",
+      "elapsed_ms": 113
+    },
+    {
+      "case_id": "TC-QRY-08",
+      "title": "查询时间未对齐",
+      "status": "PASS",
+      "detail": "10:15 与 10:00:30 均 400 TIME_NOT_ALIGNED",
+      "error": "",
+      "elapsed_ms": 30
+    },
+    {
+      "case_id": "TC-QRY-09",
+      "title": "查询时长非法",
+      "status": "PASS",
+      "detail": "end=start、end<start、145 段均 400 DURATION_OUT_OF_RANGE（145 段用 D0+4 10:30）",
+      "error": "",
+      "elapsed_ms": 40
+    },
+    {
+      "case_id": "TC-QRY-10",
+      "title": "查询超出营业时间",
+      "status": "PASS",
+      "detail": "07:30→09:00、20:00→22:30 均 400；08:00→22:00 返回 200",
+      "error": "",
+      "elapsed_ms": 76
+    },
+    {
+      "case_id": "TC-QRY-11",
+      "title": "行李尺寸过滤",
+      "status": "PASS",
+      "detail": "LARGE：A/S=0、A/M=0、A/L=1（A-12 维护）、B/L=3",
+      "error": "",
+      "elapsed_ms": 17
+    },
+    {
+      "case_id": "TC-QRY-12",
+      "title": "已预约时段与相邻时段",
+      "status": "PASS",
+      "detail": "10:00–11:00 预约 A-01；10:00–12:00 重叠→RESERVED/false；11:00–12:00 相邻→AVAILABLE/true",
+      "error": "",
+      "elapsed_ms": 523
+    },
+    {
+      "case_id": "TC-QRY-13",
+      "title": "寄存点关闭时的派生状态",
+      "status": "PASS",
+      "detail": "关闭 SP002→10 个柜格均 UNAVAILABLE/false；恢复 OPEN 后 D-01=AVAILABLE/true",
+      "error": "",
+      "elapsed_ms": 52
+    },
+    {
+      "case_id": "TC-QRY-14",
+      "title": "单柜格可用性（Q6）",
+      "status": "PASS",
+      "detail": "重叠 10:30–11:30→false/RESERVED 且无 order_no；11:00–12:00→true/[]；99999→404",
+      "error": "",
+      "elapsed_ms": 527
+    },
+    {
+      "case_id": "TC-QRY-15",
+      "title": "柜格详情：物理状态与派生状态",
+      "status": "PASS",
+      "detail": "12→MAINTENANCE/MAINTENANCE；1→AVAILABLE/AVAILABLE；DB cabinets 无 derived_status 列",
+      "error": "",
+      "elapsed_ms": 37
+    }
+  ]
+}

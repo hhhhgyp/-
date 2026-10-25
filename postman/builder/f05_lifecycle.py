@@ -1,0 +1,185 @@
+# -*- coding: utf-8 -*-
+"""05 生命周期：签到、取件、强制取消与状态机保护（R5 / R6 / M11）。"""
+
+from __future__ import annotations
+
+from . import err, folder, ok, req
+
+KEY = "tst-{{run_ts}}-"
+
+
+FOLDER = folder(
+    "05 生命周期（签到/取件/强制取消）",
+    [
+        req(
+            "05-01 签到太早（默认只允许提前 15 分钟）",
+            "POST",
+            "/reservations/{{order_no_late}}/check-in",
+            tests=err(409, "CHECKIN_WINDOW_INVALID"),
+            desc="对应 TC-CHK-02 / BR-21。订单开始时间为明日 10:00，当前远早于「开始前 15 分钟」。",
+        ),
+        req(
+            "05-02 管理端：临时允许提前 7 天签到",
+            "PUT",
+            "/admin/configs/checkin_early_minutes",
+            auth="admin",
+            body={"value": "10080"},
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.test('配置已更新', () => pm.expect(b.value).to.eql('10080'));",
+            ),
+            desc="把「等待到明天」压缩成一次配置修改；10080 分钟 = 7 天，是配置允许的上限。",
+        ),
+        req(
+            "05-03 签到成功：RESERVED -> IN_USE",
+            "POST",
+            "/reservations/{{order_no_late}}/check-in",
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.collectionVariables.set('order_no_inuse', b.order_no);",
+                "pm.test('状态 IN_USE', () => pm.expect(b.status).to.eql('IN_USE'));",
+                "pm.test('签到时间非空', () => pm.expect(b.checked_in_at).to.be.a('string').and.not.empty);",
+                "pm.test('签到不释放时段', () => pm.expect(b).to.not.have.property('released_slot_count'));",
+            ),
+            desc="对应 TC-CHK-01 / TC-CHK-09 / BR-39：签到只改状态，柜格仍被占用。",
+        ),
+        req(
+            "05-04 IN_USE 订单不可取消（状态优先于时间窗口）",
+            "POST",
+            "/reservations/{{order_no_inuse}}/cancel",
+            body={},
+            tests=err(409, "ORDER_STATUS_NOT_ALLOWED"),
+            desc="对应 TC-CAN-04：即使取消时间窗口尚未过期，也应先返回状态错误。",
+        ),
+        req(
+            "05-05 取件成功：IN_USE -> COMPLETED",
+            "POST",
+            "/reservations/{{order_no_inuse}}/complete",
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.collectionVariables.set('order_no_completed', b.order_no);",
+                "pm.test('状态 COMPLETED', () => pm.expect(b.status).to.eql('COMPLETED'));",
+                "pm.test('释放全部 2 个时段', () => pm.expect(b.released_slot_count).to.eql(2));",
+            ),
+            desc="对应 TC-CHK-06 / BR-24：取件立即释放该订单的全部占用记录。",
+        ),
+        req(
+            "05-06 重复取件",
+            "POST",
+            "/reservations/{{order_no_completed}}/complete",
+            tests=err(409, "ORDER_STATUS_NOT_ALLOWED"),
+            desc="对应 TC-CHK-08 / BR-34。",
+        ),
+        req(
+            "05-07 管理端：恢复签到提前量（15 分钟）",
+            "PUT",
+            "/admin/configs/checkin_early_minutes",
+            auth="admin",
+            body={"value": "15"},
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.test('配置已恢复', () => pm.expect(b.value).to.eql('15'));",
+            ),
+            desc="故障恢复点。",
+        ),
+        req(
+            "05-08 创建一笔用于强制取消的订单（A-05 明日 14:00）",
+            "POST",
+            "/reservations",
+            body={
+                "cabinet_id": 5,
+                "start_time": "{{t_tomorrow_14}}",
+                "end_time": "{{t_tomorrow_15}}",
+                "luggage_size": "SMALL",
+                "idempotency_key": KEY + "force",
+                "luggage_count": 1,
+            },
+            tests=ok(
+                201,
+                "const b = pm.response.json();",
+                "pm.collectionVariables.set('order_no_force', b.order_no);",
+                "pm.test('订单已创建', () => pm.expect(b.cabinet_code).to.eql('A-05'));",
+            ),
+            desc="对应 TC-ADM-12 的前置数据。",
+        ),
+        req(
+            "05-09 管理端：允许提前签到（强制取消用例）",
+            "PUT",
+            "/admin/configs/checkin_early_minutes",
+            auth="admin",
+            body={"value": "10080"},
+            tests=ok(200, "pm.test('配置已更新', () => pm.expect(pm.response.json().value).to.eql('10080'));"),
+            desc="让 05-10 可以立即把订单推进到 IN_USE。",
+        ),
+        req(
+            "05-10 签到该订单（进入 IN_USE）",
+            "POST",
+            "/reservations/{{order_no_force}}/check-in",
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.test('已进入使用中', () => pm.expect(b.status).to.eql('IN_USE'));",
+            ),
+            desc="强制取消的前置状态。",
+        ),
+        req(
+            "05-11 管理端：恢复签到提前量（15 分钟）",
+            "PUT",
+            "/admin/configs/checkin_early_minutes",
+            auth="admin",
+            body={"value": "15"},
+            tests=ok(200, "pm.test('配置已恢复', () => pm.expect(pm.response.json().value).to.eql('15'));"),
+            desc="故障恢复点。",
+        ),
+        req(
+            "05-12 管理端强制取消 IN_USE 订单",
+            "POST",
+            "/admin/reservations/{{order_no_force}}/force-cancel",
+            auth="admin",
+            body={"reason": "运营收回柜格（Postman 用例）"},
+            tests=ok(
+                200,
+                "const b = pm.response.json();",
+                "pm.test('变更前后状态', () => {",
+                "    pm.expect(b.previous_status).to.eql('IN_USE');",
+                "    pm.expect(b.status).to.eql('FORCE_CANCELLED');",
+                "});",
+                "pm.test('释放全部时段并回显原因', () => {",
+                "    pm.expect(b.released_slot_count).to.eql(2);",
+                "    pm.expect(b.reason).to.include('Postman');",
+                "});",
+            ),
+            desc="对应 TC-ADM-12 / BR-32：强制取消不受取消窗口限制，IN_USE 也可回收。",
+        ),
+        req(
+            "05-13 终态订单再次强制取消",
+            "POST",
+            "/admin/reservations/{{order_no_force}}/force-cancel",
+            auth="admin",
+            body={"reason": "重复操作"},
+            tests=err(409, "ORDER_STATUS_NOT_ALLOWED"),
+            desc="对应 TC-ADM-13 / BR-34。",
+        ),
+        req(
+            "05-14 RESERVED 订单不可直接取件",
+            "POST",
+            "/reservations/{{order_no_adjacent}}/complete",
+            tests=err(409, "ORDER_STATUS_NOT_ALLOWED"),
+            desc="对应 TC-CHK-05：必须先签到（IN_USE）才能取件。",
+        ),
+        req(
+            "05-15 强制取消缺少原因",
+            "POST",
+            "/admin/reservations/{{order_no_adjacent}}/force-cancel",
+            auth="admin",
+            body={},
+            tests=err(400, "VALIDATION_ERROR"),
+            desc="对应 TC-ADM-13：reason 必填，且失败后订单应保持 RESERVED（06 文件夹会再次读取它）。",
+        ),
+    ],
+    desc="依赖 04 创建的 order_no_late 与 03 创建的 order_no_adjacent。本文件夹会临时修改 checkin_early_minutes，并在每个分支后恢复为 15。",
+)
